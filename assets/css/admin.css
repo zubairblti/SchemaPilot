@@ -216,6 +216,24 @@
 	max-width: 1200px;
 }
 
+.schemapilot-page-editor-fields select,
+.schemapilot-page-editor-fields textarea {
+	width: 100%;
+	max-width: 100%;
+}
+
+.schemapilot-page-editor-fields p {
+	margin-top: 0;
+}
+
+.schemapilot-remove-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 12px;
+	font-weight: 600;
+}
+
 .schemapilot-toast-region {
 	position: fixed;
 	top: 56px;
