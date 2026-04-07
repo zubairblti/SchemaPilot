@@ -300,9 +300,19 @@ class SchemaPilot_Admin {
 			array(
 				'sort_column' => 'post_title',
 				'post_status' => 'publish',
-				'exclude'     => $page_ids,
 			)
 		);
+
+		if ( ! empty( $page_ids ) ) {
+			$pages = array_values(
+				array_filter(
+					$pages,
+					function ( $page ) use ( $page_ids ) {
+						return ! in_array( (int) $page->ID, $page_ids, true );
+					}
+				)
+			);
+		}
 		?>
 		<div class="wrap schemapilot-admin">
 			<div class="schemapilot-page-header">
