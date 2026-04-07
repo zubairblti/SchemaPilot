@@ -96,6 +96,59 @@
 		return backdrop;
 	}
 
+	function ensureBulkModal() {
+		var backdrop = document.querySelector('.schemapilot-swal-backdrop-bulk');
+		if (backdrop) {
+			return backdrop;
+		}
+
+		backdrop = document.createElement('div');
+		backdrop.className = 'schemapilot-swal-backdrop schemapilot-swal-backdrop-bulk';
+
+		var modal = document.createElement('div');
+		modal.className = 'schemapilot-swal';
+
+		var title = document.createElement('h3');
+		title.className = 'schemapilot-swal-title';
+		modal.appendChild(title);
+
+		var message = document.createElement('p');
+		message.className = 'schemapilot-swal-message';
+		modal.appendChild(message);
+
+		var actions = document.createElement('div');
+		actions.className = 'schemapilot-swal-actions';
+
+		var cancelBtn = document.createElement('button');
+		cancelBtn.type = 'button';
+		cancelBtn.className = 'button';
+		cancelBtn.textContent = 'Cancel';
+
+		var confirmBtn = document.createElement('button');
+		confirmBtn.type = 'button';
+		confirmBtn.className = 'button button-primary';
+		confirmBtn.textContent = 'Delete';
+
+		actions.appendChild(cancelBtn);
+		actions.appendChild(confirmBtn);
+		modal.appendChild(actions);
+		backdrop.appendChild(modal);
+		document.body.appendChild(backdrop);
+
+		cancelBtn.addEventListener('click', function () {
+			backdrop.classList.remove('is-visible');
+		});
+
+		backdrop.addEventListener('click', function (event) {
+			if (event.target === backdrop) {
+				backdrop.classList.remove('is-visible');
+			}
+		});
+
+		backdrop._confirmBtn = confirmBtn;
+		return backdrop;
+	}
+
 	function initDeleteModals() {
 		var links = document.querySelectorAll('.schemapilot-delete');
 		if (!links.length) {
@@ -118,6 +171,75 @@
 				backdrop.classList.add('is-visible');
 			});
 		});
+	}
+
+	function updateBulkControls() {
+		var bulkButton = document.querySelector('.schemapilot-bulk-delete');
+		var checkboxes = document.querySelectorAll('.schemapilot-row-checkbox');
+		var anyChecked = false;
+
+		checkboxes.forEach(function (box) {
+			if (box.checked && box.offsetParent !== null) {
+				anyChecked = true;
+			}
+		});
+
+		if (bulkButton) {
+			bulkButton.disabled = !anyChecked;
+		}
+	}
+
+	function initBulkSelection() {
+		var table = document.querySelector('.schemapilot-table');
+		if (!table) {
+			return;
+		}
+
+		var bulkForm = document.querySelector('.schemapilot-bulk-form');
+		var checkAll = document.querySelector('.schemapilot-check-all');
+		var rowCheckboxes = document.querySelectorAll('.schemapilot-row-checkbox');
+
+		if (checkAll) {
+			checkAll.addEventListener('change', function () {
+				rowCheckboxes.forEach(function (box) {
+					if (box.offsetParent !== null) {
+						box.checked = checkAll.checked;
+					}
+				});
+				updateBulkControls();
+			});
+		}
+
+		rowCheckboxes.forEach(function (box) {
+			box.addEventListener('change', function () {
+				if (checkAll && !box.checked) {
+					checkAll.checked = false;
+				}
+				updateBulkControls();
+			});
+		});
+
+		if (bulkForm) {
+			bulkForm.addEventListener('submit', function (event) {
+				var bulkButton = document.querySelector('.schemapilot-bulk-delete');
+				if (bulkButton && bulkButton.disabled) {
+					event.preventDefault();
+					return;
+				}
+
+				event.preventDefault();
+				var modal = ensureBulkModal();
+				modal.querySelector('.schemapilot-swal-title').textContent = 'Delete selected schemas?';
+				modal.querySelector('.schemapilot-swal-message').textContent = 'This will permanently delete the selected entries.';
+				modal._confirmBtn.onclick = function () {
+					modal.classList.remove('is-visible');
+					bulkForm.submit();
+				};
+				modal.classList.add('is-visible');
+			});
+		}
+
+		updateBulkControls();
 	}
 
 	function initSchemaListTable() {
@@ -155,7 +277,7 @@
 			emptyRow = document.createElement('tr');
 			emptyRow.className = 'schemapilot-empty-row';
 			var cell = document.createElement('td');
-			cell.colSpan = 5;
+			cell.colSpan = 6;
 			cell.className = 'schemapilot-empty-cell';
 			cell.textContent = 'No matching records.';
 			emptyRow.appendChild(cell);
@@ -251,6 +373,10 @@
 
 			dataRows.forEach(function (row) {
 				row.style.display = 'none';
+				var checkbox = row.querySelector('.schemapilot-row-checkbox');
+				if (checkbox) {
+					checkbox.checked = false;
+				}
 			});
 
 			if (emptyRow && emptyRow.parentNode) {
@@ -260,6 +386,7 @@
 			if (!totalItems) {
 				tbody.appendChild(ensureEmptyRow());
 				clearPagination();
+				updateBulkControls();
 				return;
 			}
 
@@ -268,6 +395,11 @@
 			});
 
 			renderPagination(totalItems);
+			var checkAll = document.querySelector('.schemapilot-check-all');
+			if (checkAll) {
+				checkAll.checked = false;
+			}
+			updateBulkControls();
 		}
 
 		if (searchInput) {
@@ -297,5 +429,6 @@
 
 		initDeleteModals();
 		initSchemaListTable();
+		initBulkSelection();
 	});
 })();

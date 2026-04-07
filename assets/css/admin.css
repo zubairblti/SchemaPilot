@@ -69,6 +69,14 @@
 	margin-bottom: 16px;
 }
 
+.schemapilot-controls-right {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+}
+
 .schemapilot-search {
 	flex: 1 1 260px;
 }
@@ -137,6 +145,15 @@
 	padding: 16px;
 	vertical-align: middle;
 	white-space: nowrap;
+}
+
+.schemapilot-col-checkbox {
+	width: 36px;
+	text-align: center;
+}
+
+.schemapilot-col-checkbox input {
+	margin: 0;
 }
 
 .schemapilot-table td {

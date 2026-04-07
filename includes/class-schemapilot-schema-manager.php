@@ -408,7 +408,7 @@ class SchemaPilot_Schema_Manager {
 		}
 
 		$matches = array();
-		preg_match_all( '/<script[^>]*type=["\]application\/ld\+json["\][^>]*>(.*?)<\/script>/is', $schema_json, $matches );
+		preg_match_all( '/<script[^>]*type=(["\']?)application\/ld\+json\\1[^>]*>(.*?)<\/script>/is', $schema_json, $matches );
 
 		if ( empty( $matches[1] ) ) {
 			return $schema_json;
