@@ -410,12 +410,12 @@ class SchemaPilot_Schema_Manager {
 		$matches = array();
 		preg_match_all( '/<script[^>]*type=(["\']?)application\/ld\+json\\1[^>]*>(.*?)<\/script>/is', $schema_json, $matches );
 
-		if ( empty( $matches[1] ) ) {
+		if ( empty( $matches[2] ) ) {
 			return $schema_json;
 		}
 
 		$json_blocks = array();
-		foreach ( $matches[1] as $block ) {
+		foreach ( $matches[2] as $block ) {
 			$block = trim( $block );
 			if ( '' !== $block ) {
 				$json_blocks[] = $block;
