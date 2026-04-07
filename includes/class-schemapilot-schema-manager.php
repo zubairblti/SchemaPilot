@@ -106,6 +106,27 @@ class SchemaPilot_Schema_Manager {
 	}
 
 	/**
+	 * Get a single schema entry by page ID.
+	 *
+	 * @param int $page_id Page ID.
+	 * @return object|null
+	 */
+	public static function get_entry_by_page_id( $page_id ) {
+		global $wpdb;
+
+		$table_name = self::get_table_name();
+		$page_id    = absint( $page_id );
+
+		if ( ! $page_id ) {
+			return null;
+		}
+
+		$query = $wpdb->prepare( "SELECT * FROM {$table_name} WHERE page_id = %d LIMIT 1", $page_id );
+
+		return $wpdb->get_row( $query );
+	}
+
+	/**
 	 * Insert or update an entry.
 	 *
 	 * @param int    $entry_id    Optional entry ID.
