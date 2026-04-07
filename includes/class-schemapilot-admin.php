@@ -24,6 +24,7 @@ class SchemaPilot_Admin {
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_assets' ) );
 		add_action( 'admin_post_schemapilot_save_schema', array( __CLASS__, 'handle_save' ) );
 		add_action( 'admin_post_schemapilot_delete_schema', array( __CLASS__, 'handle_delete' ) );
+		add_action( 'admin_post_schemapilot_bulk_delete', array( __CLASS__, 'handle_bulk_delete' ) );
 	}
 
 	/**
@@ -190,80 +191,96 @@ class SchemaPilot_Admin {
 
 			<?php self::render_notices(); ?>
 
-			<div class="schemapilot-list-controls">
-				<div class="schemapilot-search">
-					<label class="screen-reader-text" for="schemapilot-search"><?php esc_html_e( 'Search schemas', 'schemapilot' ); ?></label>
-					<input type="search" id="schemapilot-search" placeholder="<?php esc_attr_e( 'Search schemas...', 'schemapilot' ); ?>" />
-				</div>
-				<div class="schemapilot-page-size">
-					<label for="schemapilot-page-size"><?php esc_html_e( 'Rows', 'schemapilot' ); ?></label>
-					<select id="schemapilot-page-size">
-						<option value="10" selected><?php esc_html_e( '10', 'schemapilot' ); ?></option>
-						<option value="25"><?php esc_html_e( '25', 'schemapilot' ); ?></option>
-						<option value="50"><?php esc_html_e( '50', 'schemapilot' ); ?></option>
-						<option value="100"><?php esc_html_e( '100', 'schemapilot' ); ?></option>
-					</select>
-				</div>
-			</div>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="schemapilot-bulk-form">
+				<input type="hidden" name="action" value="schemapilot_bulk_delete" />
+				<?php wp_nonce_field( 'schemapilot_bulk_delete', 'schemapilot_bulk_nonce' ); ?>
 
-			<div class="schemapilot-card schemapilot-table-card">
-				<table class="widefat fixed striped schemapilot-table">
-					<thead>
-						<tr>
-							<th><?php esc_html_e( 'Page Title', 'schemapilot' ); ?></th>
-							<th><?php esc_html_e( 'Page Slug', 'schemapilot' ); ?></th>
-							<th><?php esc_html_e( 'Schema Description', 'schemapilot' ); ?></th>
-							<th><?php esc_html_e( 'Location', 'schemapilot' ); ?></th>
-							<th><?php esc_html_e( 'Actions', 'schemapilot' ); ?></th>
-						</tr>
-					</thead>
-					<tbody>
-						<?php if ( empty( $entries ) ) : ?>
+				<div class="schemapilot-list-controls">
+					<div class="schemapilot-search">
+						<label class="screen-reader-text" for="schemapilot-search"><?php esc_html_e( 'Search schemas', 'schemapilot' ); ?></label>
+						<input type="search" id="schemapilot-search" placeholder="<?php esc_attr_e( 'Search schemas...', 'schemapilot' ); ?>" />
+					</div>
+					<div class="schemapilot-controls-right">
+						<div class="schemapilot-page-size">
+							<label for="schemapilot-page-size"><?php esc_html_e( 'Rows', 'schemapilot' ); ?></label>
+							<select id="schemapilot-page-size">
+								<option value="10" selected><?php esc_html_e( '10', 'schemapilot' ); ?></option>
+								<option value="25"><?php esc_html_e( '25', 'schemapilot' ); ?></option>
+								<option value="50"><?php esc_html_e( '50', 'schemapilot' ); ?></option>
+								<option value="100"><?php esc_html_e( '100', 'schemapilot' ); ?></option>
+							</select>
+						</div>
+						<button type="submit" class="button button-secondary schemapilot-bulk-delete" disabled>
+							<?php esc_html_e( 'Delete Selected', 'schemapilot' ); ?>
+						</button>
+					</div>
+				</div>
+
+				<div class="schemapilot-card schemapilot-table-card">
+					<table class="widefat fixed striped schemapilot-table">
+						<thead>
 							<tr>
-								<td colspan="5">
-									<div class="schemapilot-empty">
-										<strong><?php esc_html_e( 'No schemas added yet.', 'schemapilot' ); ?></strong>
-										<p><?php esc_html_e( 'Create your first schema entry to start outputting JSON-LD on published pages.', 'schemapilot' ); ?></p>
-									</div>
-								</td>
+								<th class="schemapilot-col-checkbox">
+									<input type="checkbox" class="schemapilot-check-all" aria-label="<?php esc_attr_e( 'Select all schemas', 'schemapilot' ); ?>" />
+								</th>
+								<th><?php esc_html_e( 'Page Title', 'schemapilot' ); ?></th>
+								<th><?php esc_html_e( 'Page Slug', 'schemapilot' ); ?></th>
+								<th><?php esc_html_e( 'Schema Description', 'schemapilot' ); ?></th>
+								<th><?php esc_html_e( 'Location', 'schemapilot' ); ?></th>
+								<th><?php esc_html_e( 'Actions', 'schemapilot' ); ?></th>
 							</tr>
-						<?php else : ?>
-							<?php foreach ( $entries as $entry ) : ?>
-								<?php
-								$page       = get_post( (int) $entry->page_id );
-								$page_slug  = $page instanceof WP_Post ? $page->post_name : __( '(page unavailable)', 'schemapilot' );
-								$page_title = $page instanceof WP_Post ? get_the_title( $page ) : __( '(page unavailable)', 'schemapilot' );
-								$edit_url   = admin_url( 'admin.php?page=schemapilot-add&entry_id=' . absint( $entry->id ) );
-								$delete_url = wp_nonce_url(
-									admin_url( 'admin-post.php?action=schemapilot_delete_schema&entry_id=' . absint( $entry->id ) ),
-									'schemapilot_delete_schema_' . absint( $entry->id )
-								);
-								?>
+						</thead>
+						<tbody>
+							<?php if ( empty( $entries ) ) : ?>
 								<tr>
-									<td><?php echo esc_html( $page_title ); ?></td>
-									<td><code><?php echo esc_html( $page_slug ); ?></code></td>
-									<td><?php echo esc_html( $entry->schema_preview ); ?></td>
-									<td>
-										<span class="schemapilot-badge schemapilot-badge-<?php echo esc_attr( $entry->location ); ?>">
-											<?php echo esc_html( ucfirst( $entry->location ) ); ?>
-										</span>
-									</td>
-									<td>
-										<a class="button button-secondary" href="<?php echo esc_url( $edit_url ); ?>">
-											<?php esc_html_e( 'Edit', 'schemapilot' ); ?>
-										</a>
-										<a class="button button-link-delete schemapilot-delete" href="<?php echo esc_url( $delete_url ); ?>" data-title="<?php echo esc_attr__( 'Delete schema?', 'schemapilot' ); ?>" data-message="<?php echo esc_attr__( 'This action cannot be undone.', 'schemapilot' ); ?>">
-											<?php esc_html_e( 'Delete', 'schemapilot' ); ?>
-										</a>
+									<td colspan="6">
+										<div class="schemapilot-empty">
+											<strong><?php esc_html_e( 'No schemas added yet.', 'schemapilot' ); ?></strong>
+											<p><?php esc_html_e( 'Create your first schema entry to start outputting JSON-LD on published pages.', 'schemapilot' ); ?></p>
+										</div>
 									</td>
 								</tr>
-							<?php endforeach; ?>
-						<?php endif; ?>
-					</tbody>
-				</table>
-			</div>
+							<?php else : ?>
+								<?php foreach ( $entries as $entry ) : ?>
+									<?php
+									$page       = get_post( (int) $entry->page_id );
+									$page_slug  = $page instanceof WP_Post ? $page->post_name : __( '(page unavailable)', 'schemapilot' );
+									$page_title = $page instanceof WP_Post ? get_the_title( $page ) : __( '(page unavailable)', 'schemapilot' );
+									$edit_url   = admin_url( 'admin.php?page=schemapilot-add&entry_id=' . absint( $entry->id ) );
+									$delete_url = wp_nonce_url(
+										admin_url( 'admin-post.php?action=schemapilot_delete_schema&entry_id=' . absint( $entry->id ) ),
+										'schemapilot_delete_schema_' . absint( $entry->id )
+									);
+									?>
+									<tr>
+										<td class="schemapilot-col-checkbox">
+											<input type="checkbox" class="schemapilot-row-checkbox" name="entry_ids[]" value="<?php echo esc_attr( $entry->id ); ?>" />
+										</td>
+										<td><?php echo esc_html( $page_title ); ?></td>
+										<td><code><?php echo esc_html( $page_slug ); ?></code></td>
+										<td><?php echo esc_html( $entry->schema_preview ); ?></td>
+										<td>
+											<span class="schemapilot-badge schemapilot-badge-<?php echo esc_attr( $entry->location ); ?>">
+												<?php echo esc_html( ucfirst( $entry->location ) ); ?>
+											</span>
+										</td>
+										<td>
+											<a class="button button-secondary" href="<?php echo esc_url( $edit_url ); ?>">
+												<?php esc_html_e( 'Edit', 'schemapilot' ); ?>
+											</a>
+											<a class="button button-link-delete schemapilot-delete" href="<?php echo esc_url( $delete_url ); ?>" data-title="<?php echo esc_attr__( 'Delete schema?', 'schemapilot' ); ?>" data-message="<?php echo esc_attr__( 'This action cannot be undone.', 'schemapilot' ); ?>">
+												<?php esc_html_e( 'Delete', 'schemapilot' ); ?>
+											</a>
+										</td>
+									</tr>
+								<?php endforeach; ?>
+							<?php endif; ?>
+						</tbody>
+					</table>
+				</div>
 
-			<div class="schemapilot-pagination" id="schemapilot-pagination"></div>
+				<div class="schemapilot-pagination" id="schemapilot-pagination"></div>
+			</form>
 		</div>
 		<?php
 	}
@@ -300,9 +317,19 @@ class SchemaPilot_Admin {
 			array(
 				'sort_column' => 'post_title',
 				'post_status' => 'publish',
-				'exclude'     => $page_ids,
 			)
 		);
+
+		if ( ! empty( $page_ids ) ) {
+			$pages = array_values(
+				array_filter(
+					$pages,
+					function ( $page ) use ( $page_ids ) {
+						return ! in_array( (int) $page->ID, $page_ids, true );
+					}
+				)
+			);
+		}
 		?>
 		<div class="wrap schemapilot-admin">
 			<div class="schemapilot-page-header">
@@ -450,6 +477,66 @@ class SchemaPilot_Admin {
 				'page'    => 'schemapilot-list',
 				'notice'  => $deleted ? 'success' : 'error',
 				'message' => $deleted ? __( 'Schema deleted successfully.', 'schemapilot' ) : __( 'Schema could not be deleted.', 'schemapilot' ),
+			),
+			admin_url( 'admin.php' )
+		);
+
+		wp_safe_redirect( $redirect_url );
+		exit;
+	}
+
+	/**
+	 * Handle bulk delete action.
+	 *
+	 * @return void
+	 */
+	public static function handle_bulk_delete() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to perform this action.', 'schemapilot' ) );
+		}
+
+		check_admin_referer( 'schemapilot_bulk_delete', 'schemapilot_bulk_nonce' );
+
+		$entry_ids = isset( $_POST['entry_ids'] ) ? (array) wp_unslash( $_POST['entry_ids'] ) : array();
+		$entry_ids = array_values(
+			array_filter(
+				array_map( 'absint', $entry_ids )
+			)
+		);
+
+		if ( empty( $entry_ids ) ) {
+			$redirect_url = add_query_arg(
+				array(
+					'page'    => 'schemapilot-list',
+					'notice'  => 'error',
+					'message' => __( 'Please select at least one schema entry.', 'schemapilot' ),
+				),
+				admin_url( 'admin.php' )
+			);
+			wp_safe_redirect( $redirect_url );
+			exit;
+		}
+
+		$deleted = 0;
+		foreach ( $entry_ids as $entry_id ) {
+			if ( SchemaPilot_Schema_Manager::delete_entry( $entry_id ) ) {
+				$deleted++;
+			}
+		}
+
+		$message = $deleted
+			? sprintf(
+				/* translators: %d: number of deleted schemas. */
+				_n( '%d schema deleted successfully.', '%d schemas deleted successfully.', $deleted, 'schemapilot' ),
+				$deleted
+			)
+			: __( 'No schemas were deleted.', 'schemapilot' );
+
+		$redirect_url = add_query_arg(
+			array(
+				'page'    => 'schemapilot-list',
+				'notice'  => $deleted ? 'success' : 'error',
+				'message' => $message,
 			),
 			admin_url( 'admin.php' )
 		);

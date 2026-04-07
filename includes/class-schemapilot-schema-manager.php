@@ -132,6 +132,17 @@ class SchemaPilot_Schema_Manager {
 			return new WP_Error( 'invalid_page', __( 'Please select a valid published page.', 'schemapilot' ) );
 		}
 
+		$existing_id = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT id FROM {$table_name} WHERE page_id = %d LIMIT 1",
+				$page_id
+			)
+		);
+
+		if ( $existing_id && $existing_id !== $entry_id ) {
+			return new WP_Error( 'duplicate_page', __( 'Schema already exists for this page.', 'schemapilot' ) );
+		}
+
 		$normalized_json = wp_json_encode(
 			$decoded,
 			JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT
@@ -397,7 +408,7 @@ class SchemaPilot_Schema_Manager {
 		}
 
 		$matches = array();
-		preg_match_all( '/<script[^>]*type=["\]application\/ld\+json["\][^>]*>(.*?)<\/script>/is', $schema_json, $matches );
+		preg_match_all( '/<script[^>]*type=(["\']?)application\/ld\+json\\1[^>]*>(.*?)<\/script>/is', $schema_json, $matches );
 
 		if ( empty( $matches[1] ) ) {
 			return $schema_json;
