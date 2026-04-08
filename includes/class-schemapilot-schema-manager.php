@@ -149,8 +149,8 @@ class SchemaPilot_Schema_Manager {
 			return new WP_Error( 'invalid_json', __( 'Schema must be valid JSON-LD.', 'schemapilot' ) );
 		}
 
-		if ( 'page' !== get_post_type( $page_id ) || 'publish' !== get_post_status( $page_id ) ) {
-			return new WP_Error( 'invalid_page', __( 'Please select a valid published page.', 'schemapilot' ) );
+		if ( ! self::is_supported_content( $page_id ) ) {
+			return new WP_Error( 'invalid_page', __( 'Please select a valid published page or post.', 'schemapilot' ) );
 		}
 
 		$existing_id = (int) $wpdb->get_var(
@@ -263,7 +263,7 @@ class SchemaPilot_Schema_Manager {
 	 * @return void
 	 */
 	protected static function render_schema_by_location( $location ) {
-		if ( is_admin() || ! is_page() ) {
+		if ( is_admin() || ! is_singular( array( 'page', 'post' ) ) ) {
 			return;
 		}
 
@@ -452,5 +452,17 @@ class SchemaPilot_Schema_Manager {
 		}
 
 		return '[' . implode( ',', $json_blocks ) . ']';
+	}
+
+	/**
+	 * Check whether the selected content is a supported published page or post.
+	 *
+	 * @param int $page_id Post ID.
+	 * @return bool
+	 */
+	protected static function is_supported_content( $page_id ) {
+		$post_type = get_post_type( $page_id );
+
+		return in_array( $post_type, array( 'page', 'post' ), true ) && 'publish' === get_post_status( $page_id );
 	}
 }
