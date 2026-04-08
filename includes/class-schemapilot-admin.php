@@ -30,9 +30,12 @@ class SchemaPilot_Admin {
 		add_action( 'admin_menu', array( __CLASS__, 'register_admin_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_assets' ) );
 		add_action( 'add_meta_boxes_page', array( __CLASS__, 'register_page_meta_box' ) );
+		add_action( 'add_meta_boxes_post', array( __CLASS__, 'register_post_meta_box' ) );
 		add_action( 'save_post_page', array( __CLASS__, 'handle_page_editor_save' ), 10, 2 );
+		add_action( 'save_post_post', array( __CLASS__, 'handle_page_editor_save' ), 10, 2 );
 		add_filter( 'redirect_post_location', array( __CLASS__, 'append_page_editor_notice' ), 10, 2 );
 		add_action( 'admin_notices', array( __CLASS__, 'render_page_editor_notice' ) );
+		add_action( 'admin_post_schemapilot_save_content_type_setting', array( __CLASS__, 'handle_content_type_setting_save' ) );
 		add_action( 'admin_post_schemapilot_save_schema', array( __CLASS__, 'handle_save' ) );
 		add_action( 'admin_post_schemapilot_delete_schema', array( __CLASS__, 'handle_delete' ) );
 		add_action( 'admin_post_schemapilot_bulk_delete', array( __CLASS__, 'handle_bulk_delete' ) );
@@ -101,7 +104,7 @@ class SchemaPilot_Admin {
 
 		if ( in_array( $hook_suffix, array( 'post.php', 'post-new.php' ), true ) && function_exists( 'get_current_screen' ) ) {
 			$screen         = get_current_screen();
-			$is_page_editor = $screen && 'page' === $screen->post_type;
+			$is_page_editor = $screen && in_array( $screen->post_type, array( 'page', 'post' ), true );
 		}
 
 		if ( ! in_array( $hook_suffix, $allowed_hooks, true ) && ! $is_page_editor ) {
@@ -130,11 +133,35 @@ class SchemaPilot_Admin {
 	 * @return void
 	 */
 	public static function register_page_meta_box() {
+		if ( ! self::is_content_type_enabled( 'page' ) ) {
+			return;
+		}
+
 		add_meta_box(
 			'schemapilot-page-schema',
 			__( 'SchemaPilot', 'schemapilot' ),
 			array( __CLASS__, 'render_page_meta_box' ),
 			'page',
+			'normal',
+			'default'
+		);
+	}
+
+	/**
+	 * Register the post editor meta box.
+	 *
+	 * @return void
+	 */
+	public static function register_post_meta_box() {
+		if ( ! self::is_content_type_enabled( 'post' ) ) {
+			return;
+		}
+
+		add_meta_box(
+			'schemapilot-post-schema',
+			__( 'SchemaPilot', 'schemapilot' ),
+			array( __CLASS__, 'render_page_meta_box' ),
+			'post',
 			'normal',
 			'default'
 		);
@@ -153,7 +180,7 @@ class SchemaPilot_Admin {
 		wp_nonce_field( 'schemapilot_page_editor_save', 'schemapilot_page_editor_nonce' );
 		?>
 		<div class="schemapilot-page-editor-fields">
-			<p><?php esc_html_e( 'Add page-specific JSON-LD here without leaving the page editor. This uses the same schema storage as the Schema List screen.', 'schemapilot' ); ?></p>
+			<p><?php esc_html_e( 'Add content-specific JSON-LD here without leaving the editor. This uses the same schema storage as the Schema List screen.', 'schemapilot' ); ?></p>
 
 			<p>
 				<label for="schemapilot_page_editor_location"><strong><?php esc_html_e( 'Location', 'schemapilot' ); ?></strong></label>
@@ -168,12 +195,12 @@ class SchemaPilot_Admin {
 				<label for="schemapilot_page_editor_schema_json"><strong><?php esc_html_e( 'Schema JSON-LD', 'schemapilot' ); ?></strong></label>
 			</p>
 			<textarea id="schemapilot_page_editor_schema_json" name="schemapilot_schema_json" class="large-text code" rows="14" placeholder="{\n  &quot;@context&quot;: &quot;https://schema.org&quot;,\n  &quot;@type&quot;: &quot;WebPage&quot;\n}"><?php echo esc_textarea( $form_data['schema_json'] ); ?></textarea>
-			<p class="description"><?php esc_html_e( 'Paste valid JSON-LD. If this page already has a schema, updating the page will update that entry.', 'schemapilot' ); ?></p>
+			<p class="description"><?php esc_html_e( 'Paste valid JSON-LD. If this content already has a schema, updating it will update that entry.', 'schemapilot' ); ?></p>
 
 			<?php if ( $entry instanceof stdClass ) : ?>
 				<label class="schemapilot-remove-toggle" for="schemapilot_remove_schema">
 					<input id="schemapilot_remove_schema" type="checkbox" name="schemapilot_remove_schema" value="1" />
-					<?php esc_html_e( 'Remove schema from this page on update', 'schemapilot' ); ?>
+					<?php esc_html_e( 'Remove schema from this content on update', 'schemapilot' ); ?>
 				</label>
 			<?php endif; ?>
 		</div>
@@ -189,11 +216,36 @@ class SchemaPilot_Admin {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'You do not have permission to access this page.', 'schemapilot' ) );
 		}
+
+		$content_type_setting = self::get_content_type_setting();
 		?>
 		<div class="wrap schemapilot-admin">
 			<h1><?php esc_html_e( 'SchemaPilot Dashboard', 'schemapilot' ); ?></h1>
 
 			<?php self::render_notices(); ?>
+
+			<div class="schemapilot-dashboard-setting">
+				<div class="schemapilot-card schemapilot-settings-card">
+					<div class="schemapilot-settings-copy">
+						<span class="schemapilot-eyebrow"><?php esc_html_e( 'Content Selection', 'schemapilot' ); ?></span>
+						<h2><?php esc_html_e( 'Control which content appears in Schema Add/Edit.', 'schemapilot' ); ?></h2>
+						<p><?php esc_html_e( 'Choose whether the schema selector should list published pages, published posts, or both. This only changes what is available in the dropdown and does not alter the existing schema behavior.', 'schemapilot' ); ?></p>
+					</div>
+					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="schemapilot-settings-form">
+						<input type="hidden" name="action" value="schemapilot_save_content_type_setting" />
+						<?php wp_nonce_field( 'schemapilot_save_content_type_setting', 'schemapilot_content_type_nonce' ); ?>
+						<label for="schemapilot_content_type_setting" class="schemapilot-settings-label">
+							<?php esc_html_e( 'Available Content', 'schemapilot' ); ?>
+						</label>
+						<select id="schemapilot_content_type_setting" name="content_type_setting">
+							<option value="pages" <?php selected( 'pages', $content_type_setting ); ?>><?php esc_html_e( 'Pages', 'schemapilot' ); ?></option>
+							<option value="posts" <?php selected( 'posts', $content_type_setting ); ?>><?php esc_html_e( 'Posts', 'schemapilot' ); ?></option>
+							<option value="both" <?php selected( 'both', $content_type_setting ); ?>><?php esc_html_e( 'Both Pages and Posts', 'schemapilot' ); ?></option>
+						</select>
+						<?php submit_button( __( 'Save Setting', 'schemapilot' ), 'primary', 'submit', false ); ?>
+					</form>
+				</div>
+			</div>
 
 			<div class="schemapilot-grid">
 				<div class="schemapilot-card schemapilot-hero-card">
@@ -230,9 +282,9 @@ class SchemaPilot_Admin {
 					<h3><?php esc_html_e( 'How to use this plugin', 'schemapilot' ); ?></h3>
 					<ol class="schemapilot-steps">
 						<li><?php esc_html_e( 'Open the schema list and create a new entry.', 'schemapilot' ); ?></li>
-						<li><?php esc_html_e( 'Select a published page from the dropdown.', 'schemapilot' ); ?></li>
+						<li><?php esc_html_e( 'Select a published page or post from the dropdown, based on your dashboard setting.', 'schemapilot' ); ?></li>
 						<li><?php esc_html_e( 'Choose whether the JSON-LD should render in the head or footer.', 'schemapilot' ); ?></li>
-						<li><?php esc_html_e( 'Paste valid JSON-LD, save, and test the selected page.', 'schemapilot' ); ?></li>
+						<li><?php esc_html_e( 'Paste valid JSON-LD, save, and test the selected content.', 'schemapilot' ); ?></li>
 					</ol>
 				</div>
 			</div>
@@ -256,7 +308,7 @@ class SchemaPilot_Admin {
 			<div class="schemapilot-page-header">
 				<div>
 					<h1><?php esc_html_e( 'Schema List', 'schemapilot' ); ?></h1>
-					<p><?php esc_html_e( 'Manage page-specific JSON-LD entries and where they render on the frontend.', 'schemapilot' ); ?></p>
+					<p><?php esc_html_e( 'Manage content-specific JSON-LD entries and where they render on the frontend.', 'schemapilot' ); ?></p>
 				</div>
 				<a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=schemapilot-add' ) ); ?>">
 					<?php esc_html_e( 'Add New Schema', 'schemapilot' ); ?>
@@ -275,6 +327,14 @@ class SchemaPilot_Admin {
 						<input type="search" id="schemapilot-search" placeholder="<?php esc_attr_e( 'Search schemas...', 'schemapilot' ); ?>" />
 					</div>
 					<div class="schemapilot-controls-right">
+						<div class="schemapilot-type-filter">
+							<label for="schemapilot-type-filter"><?php esc_html_e( 'Type', 'schemapilot' ); ?></label>
+							<select id="schemapilot-type-filter">
+								<option value="all"><?php esc_html_e( 'All', 'schemapilot' ); ?></option>
+								<option value="page"><?php esc_html_e( 'Page', 'schemapilot' ); ?></option>
+								<option value="post"><?php esc_html_e( 'Post', 'schemapilot' ); ?></option>
+							</select>
+						</div>
 						<div class="schemapilot-page-size">
 							<label for="schemapilot-page-size"><?php esc_html_e( 'Rows', 'schemapilot' ); ?></label>
 							<select id="schemapilot-page-size">
@@ -297,8 +357,9 @@ class SchemaPilot_Admin {
 								<th class="schemapilot-col-checkbox">
 									<input type="checkbox" class="schemapilot-check-all" aria-label="<?php esc_attr_e( 'Select all schemas', 'schemapilot' ); ?>" />
 								</th>
-								<th><?php esc_html_e( 'Page Title', 'schemapilot' ); ?></th>
-								<th><?php esc_html_e( 'Page Slug', 'schemapilot' ); ?></th>
+								<th><?php esc_html_e( 'Content Title', 'schemapilot' ); ?></th>
+								<th><?php esc_html_e( 'Content Slug', 'schemapilot' ); ?></th>
+								<th><?php esc_html_e( 'Type', 'schemapilot' ); ?></th>
 								<th><?php esc_html_e( 'Schema Description', 'schemapilot' ); ?></th>
 								<th><?php esc_html_e( 'Location', 'schemapilot' ); ?></th>
 								<th><?php esc_html_e( 'Actions', 'schemapilot' ); ?></th>
@@ -307,10 +368,10 @@ class SchemaPilot_Admin {
 						<tbody>
 							<?php if ( empty( $entries ) ) : ?>
 								<tr>
-									<td colspan="6">
+									<td colspan="7">
 										<div class="schemapilot-empty">
 											<strong><?php esc_html_e( 'No schemas added yet.', 'schemapilot' ); ?></strong>
-											<p><?php esc_html_e( 'Create your first schema entry to start outputting JSON-LD on published pages.', 'schemapilot' ); ?></p>
+											<p><?php esc_html_e( 'Create your first schema entry to start outputting JSON-LD on published pages or posts.', 'schemapilot' ); ?></p>
 										</div>
 									</td>
 								</tr>
@@ -320,18 +381,21 @@ class SchemaPilot_Admin {
 									$page       = get_post( (int) $entry->page_id );
 									$page_slug  = $page instanceof WP_Post ? $page->post_name : __( '(page unavailable)', 'schemapilot' );
 									$page_title = $page instanceof WP_Post ? get_the_title( $page ) : __( '(page unavailable)', 'schemapilot' );
+									$page_type  = $page instanceof WP_Post ? get_post_type_object( $page->post_type ) : null;
+									$type_label = $page_type ? $page_type->labels->singular_name : __( 'Unavailable', 'schemapilot' );
 									$edit_url   = admin_url( 'admin.php?page=schemapilot-add&entry_id=' . absint( $entry->id ) );
 									$delete_url = wp_nonce_url(
 										admin_url( 'admin-post.php?action=schemapilot_delete_schema&entry_id=' . absint( $entry->id ) ),
 										'schemapilot_delete_schema_' . absint( $entry->id )
 									);
 									?>
-									<tr>
+									<tr data-content-type="<?php echo esc_attr( $page instanceof WP_Post ? $page->post_type : '' ); ?>">
 										<td class="schemapilot-col-checkbox">
 											<input type="checkbox" class="schemapilot-row-checkbox" name="entry_ids[]" value="<?php echo esc_attr( $entry->id ); ?>" />
 										</td>
 										<td><?php echo esc_html( $page_title ); ?></td>
 										<td><code><?php echo esc_html( $page_slug ); ?></code></td>
+										<td><?php echo esc_html( $type_label ); ?></td>
 										<td><?php echo esc_html( $entry->schema_preview ); ?></td>
 										<td>
 											<span class="schemapilot-badge schemapilot-badge-<?php echo esc_attr( $entry->location ); ?>">
@@ -373,33 +437,53 @@ class SchemaPilot_Admin {
 		$entry    = $entry_id ? SchemaPilot_Schema_Manager::get_entry( $entry_id ) : null;
 		$is_edit  = $entry instanceof stdClass;
 
-		$form_data = self::get_form_data( $entry );
-		$entries   = SchemaPilot_Schema_Manager::get_entries();
-		$page_ids  = array();
-
-		foreach ( $entries as $schema_entry ) {
-			$page_ids[] = (int) $schema_entry->page_id;
-		}
-
-		$page_ids = array_values( array_unique( array_filter( $page_ids ) ) );
+		$form_data      = self::get_form_data( $entry );
+		$entries        = SchemaPilot_Schema_Manager::get_entries();
+		$content_ids    = array();
+		$allowed_types  = self::get_allowed_content_types();
+		$content_items  = self::get_available_content_items( $allowed_types );
 
 		if ( $is_edit && $entry ) {
-			$page_ids = array_diff( $page_ids, array( (int) $entry->page_id ) );
+			$current_item = get_post( (int) $entry->page_id );
+
+			if ( $current_item instanceof WP_Post ) {
+				$has_current_item = false;
+
+				foreach ( $content_items as $item ) {
+					if ( (int) $item->ID === (int) $current_item->ID ) {
+						$has_current_item = true;
+						break;
+					}
+				}
+
+				if ( ! $has_current_item ) {
+					$content_items[] = $current_item;
+					usort(
+						$content_items,
+						function ( $left, $right ) {
+							return strcasecmp( $left->post_title, $right->post_title );
+						}
+					);
+				}
+			}
 		}
 
-		$pages = get_pages(
-			array(
-				'sort_column' => 'post_title',
-				'post_status' => 'publish',
-			)
-		);
+		foreach ( $entries as $schema_entry ) {
+			$content_ids[] = (int) $schema_entry->page_id;
+		}
 
-		if ( ! empty( $page_ids ) ) {
-			$pages = array_values(
+		$content_ids = array_values( array_unique( array_filter( $content_ids ) ) );
+
+		if ( $is_edit && $entry ) {
+			$content_ids = array_diff( $content_ids, array( (int) $entry->page_id ) );
+		}
+
+		if ( ! empty( $content_ids ) ) {
+			$content_items = array_values(
 				array_filter(
-					$pages,
-					function ( $page ) use ( $page_ids ) {
-						return ! in_array( (int) $page->ID, $page_ids, true );
+					$content_items,
+					function ( $item ) use ( $content_ids ) {
+						return ! in_array( (int) $item->ID, $content_ids, true );
 					}
 				)
 			);
@@ -409,7 +493,7 @@ class SchemaPilot_Admin {
 			<div class="schemapilot-page-header">
 				<div>
 					<h1><?php echo esc_html( $is_edit ? __( 'Edit Schema', 'schemapilot' ) : __( 'Add New Schema', 'schemapilot' ) ); ?></h1>
-					<p><?php esc_html_e( 'Attach JSON-LD to a published page and choose where the markup should render.', 'schemapilot' ); ?></p>
+					<p><?php esc_html_e( 'Attach JSON-LD to published content and choose where the markup should render.', 'schemapilot' ); ?></p>
 				</div>
 				<a class="button button-secondary" href="<?php echo esc_url( admin_url( 'admin.php?page=schemapilot-list' ) ); ?>">
 					<?php esc_html_e( 'Back to Schema List', 'schemapilot' ); ?>
@@ -428,18 +512,27 @@ class SchemaPilot_Admin {
 						<tbody>
 							<tr>
 								<th scope="row">
-									<label for="schemapilot_page_id"><?php esc_html_e( 'Page Selector', 'schemapilot' ); ?></label>
+									<label for="schemapilot_page_id"><?php esc_html_e( 'Content Selector', 'schemapilot' ); ?></label>
 								</th>
 								<td>
 									<select id="schemapilot_page_id" name="page_id" required>
-										<option value=""><?php esc_html_e( 'Select a page', 'schemapilot' ); ?></option>
-										<?php foreach ( $pages as $page ) : ?>
-											<option value="<?php echo esc_attr( $page->ID ); ?>" <?php selected( (int) $form_data['page_id'], (int) $page->ID ); ?>>
-												<?php echo esc_html( $page->post_title ); ?>
+										<option value=""><?php esc_html_e( 'Select content', 'schemapilot' ); ?></option>
+										<?php foreach ( $content_items as $item ) : ?>
+											<?php $type_object = get_post_type_object( $item->post_type ); ?>
+											<option value="<?php echo esc_attr( $item->ID ); ?>" <?php selected( (int) $form_data['page_id'], (int) $item->ID ); ?>>
+												<?php
+												echo esc_html(
+													sprintf(
+														'%1$s (%2$s)',
+														$item->post_title,
+														$type_object ? $type_object->labels->singular_name : ucfirst( $item->post_type )
+													)
+												);
+												?>
 											</option>
 										<?php endforeach; ?>
 									</select>
-									<p class="description"><?php esc_html_e( 'Only published pages are available for selection.', 'schemapilot' ); ?></p>
+									<p class="description"><?php echo esc_html( self::get_content_selector_description( $allowed_types ) ); ?></p>
 								</td>
 							</tr>
 							<tr>
@@ -522,6 +615,35 @@ class SchemaPilot_Admin {
 				'page'    => 'schemapilot-list',
 				'notice'  => 'success',
 				'message' => $entry_id ? __( 'Schema updated successfully.', 'schemapilot' ) : __( 'Schema added successfully.', 'schemapilot' ),
+			),
+			admin_url( 'admin.php' )
+		);
+
+		wp_safe_redirect( $redirect_url );
+		exit;
+	}
+
+	/**
+	 * Save the dashboard content type setting.
+	 *
+	 * @return void
+	 */
+	public static function handle_content_type_setting_save() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to perform this action.', 'schemapilot' ) );
+		}
+
+		check_admin_referer( 'schemapilot_save_content_type_setting', 'schemapilot_content_type_nonce' );
+
+		$setting = isset( $_POST['content_type_setting'] ) ? self::sanitize_content_type_setting( wp_unslash( $_POST['content_type_setting'] ) ) : 'pages';
+
+		update_option( 'schemapilot_content_type_setting', $setting );
+
+		$redirect_url = add_query_arg(
+			array(
+				'page'    => 'schemapilot',
+				'notice'  => 'success',
+				'message' => __( 'Content selection setting saved.', 'schemapilot' ),
 			),
 			admin_url( 'admin.php' )
 		);
@@ -639,11 +761,11 @@ class SchemaPilot_Admin {
 			return;
 		}
 
-		if ( wp_is_post_revision( $post_id ) || 'page' !== $post->post_type ) {
+		if ( wp_is_post_revision( $post_id ) || ! in_array( $post->post_type, array( 'page', 'post' ), true ) ) {
 			return;
 		}
 
-		if ( ! current_user_can( 'edit_page', $post_id ) ) {
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
 			return;
 		}
 
@@ -659,7 +781,7 @@ class SchemaPilot_Admin {
 			self::clear_page_editor_form_state( $post_id );
 			self::set_page_editor_notice(
 				$deleted ? 'success' : 'error',
-				$deleted ? __( 'Schema removed from this page.', 'schemapilot' ) : __( 'Schema could not be removed from this page.', 'schemapilot' )
+				$deleted ? __( 'Schema removed from this content.', 'schemapilot' ) : __( 'Schema could not be removed from this content.', 'schemapilot' )
 			);
 
 			return;
@@ -688,7 +810,7 @@ class SchemaPilot_Admin {
 		self::clear_page_editor_form_state( $post_id );
 		self::set_page_editor_notice(
 			'success',
-			$entry_id ? __( 'Schema updated for this page.', 'schemapilot' ) : __( 'Schema added to this page.', 'schemapilot' )
+			$entry_id ? __( 'Schema updated for this content.', 'schemapilot' ) : __( 'Schema added to this content.', 'schemapilot' )
 		);
 	}
 
@@ -721,7 +843,7 @@ class SchemaPilot_Admin {
 	public static function render_page_editor_notice() {
 		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
 
-		if ( ! $screen || 'page' !== $screen->post_type || 'post' !== $screen->base ) {
+		if ( ! $screen || ! in_array( $screen->post_type, array( 'page', 'post' ), true ) || 'post' !== $screen->base ) {
 			return;
 		}
 
@@ -894,5 +1016,101 @@ class SchemaPilot_Admin {
 	 */
 	protected static function get_page_editor_form_state_key( $page_id ) {
 		return 'schemapilot_page_editor_state_' . get_current_user_id() . '_' . absint( $page_id );
+	}
+
+	/**
+	 * Get the dashboard content type setting.
+	 *
+	 * @return string
+	 */
+	protected static function get_content_type_setting() {
+		return self::sanitize_content_type_setting( get_option( 'schemapilot_content_type_setting', 'pages' ) );
+	}
+
+	/**
+	 * Normalize the dashboard content type setting.
+	 *
+	 * @param string $setting Raw setting value.
+	 * @return string
+	 */
+	protected static function sanitize_content_type_setting( $setting ) {
+		$setting = sanitize_key( (string) $setting );
+
+		if ( in_array( $setting, array( 'pages', 'posts', 'both' ), true ) ) {
+			return $setting;
+		}
+
+		return 'pages';
+	}
+
+	/**
+	 * Get the allowed post types for the content selector.
+	 *
+	 * @return array<int, string>
+	 */
+	protected static function get_allowed_content_types() {
+		$setting = self::get_content_type_setting();
+
+		if ( 'posts' === $setting ) {
+			return array( 'post' );
+		}
+
+		if ( 'both' === $setting ) {
+			return array( 'page', 'post' );
+		}
+
+		return array( 'page' );
+	}
+
+	/**
+	 * Fetch published content items for the Add/Edit selector.
+	 *
+	 * @param array<int, string> $post_types Allowed post types.
+	 * @return array<int, WP_Post>
+	 */
+	protected static function get_available_content_items( $post_types ) {
+		$query = new WP_Query(
+			array(
+				'post_type'              => $post_types,
+				'post_status'            => 'publish',
+				'posts_per_page'         => -1,
+				'orderby'                => 'title',
+				'order'                  => 'ASC',
+				'ignore_sticky_posts'    => true,
+				'no_found_rows'          => true,
+				'update_post_meta_cache' => false,
+				'update_post_term_cache' => false,
+			)
+		);
+
+		return $query->posts;
+	}
+
+	/**
+	 * Build the Add/Edit selector description for the active setting.
+	 *
+	 * @param array<int, string> $allowed_types Allowed post types.
+	 * @return string
+	 */
+	protected static function get_content_selector_description( $allowed_types ) {
+		if ( 1 === count( $allowed_types ) && 'page' === $allowed_types[0] ) {
+			return __( 'Only published pages are available for selection.', 'schemapilot' );
+		}
+
+		if ( 1 === count( $allowed_types ) && 'post' === $allowed_types[0] ) {
+			return __( 'Only published posts are available for selection.', 'schemapilot' );
+		}
+
+		return __( 'Published pages and posts are available for selection.', 'schemapilot' );
+	}
+
+	/**
+	 * Check whether a post type is enabled by the dashboard setting.
+	 *
+	 * @param string $post_type Post type key.
+	 * @return bool
+	 */
+	protected static function is_content_type_enabled( $post_type ) {
+		return in_array( $post_type, self::get_allowed_content_types(), true );
 	}
 }
