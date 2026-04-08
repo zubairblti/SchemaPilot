@@ -9,6 +9,10 @@
 	margin-top: 24px;
 }
 
+.schemapilot-dashboard-setting {
+	margin-top: 20px;
+}
+
 .schemapilot-card {
 	background: #fff;
 	border: 1px solid #dcdcde;
@@ -20,6 +24,25 @@
 .schemapilot-hero-card {
 	background: linear-gradient(135deg, #f8fbff 0%, #eef6ff 100%);
 	grid-column: 1 / -1;
+}
+
+.schemapilot-settings-card {
+	display: grid;
+	grid-template-columns: minmax(0, 1.5fr) minmax(280px, 420px);
+	gap: 24px;
+	align-items: end;
+	background: linear-gradient(135deg, #ffffff 0%, #f7faff 100%);
+}
+
+.schemapilot-settings-copy h2,
+.schemapilot-settings-copy p {
+	margin-top: 0;
+}
+
+.schemapilot-settings-copy p {
+	margin-bottom: 0;
+	color: #50575e;
+	max-width: 760px;
 }
 
 .schemapilot-eyebrow {
@@ -41,6 +64,32 @@
 .schemapilot-steps {
 	margin: 0;
 	padding-left: 18px;
+}
+
+.schemapilot-settings-form {
+	display: grid;
+	gap: 12px;
+	padding: 18px;
+	border: 1px solid #d6e4ff;
+	border-radius: 14px;
+	background: #fff;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.schemapilot-settings-label {
+	display: block;
+	font-weight: 600;
+	color: #1f2937;
+}
+
+.schemapilot-settings-form select {
+	width: 100%;
+	max-width: 100%;
+}
+
+.schemapilot-settings-form .submit {
+	margin: 0;
+	padding: 0;
 }
 
 .schemapilot-page-header {
@@ -78,13 +127,19 @@
 	max-width: 360px;
 }
 
+.schemapilot-type-filter,
 .schemapilot-controls-right {
 	display: flex;
 	align-items: center;
 	gap: 12px;
 	flex-wrap: wrap;
+}
+
+.schemapilot-controls-right {
 	justify-content: flex-end;
 }
+
+.schemapilot-type-filter,
 .schemapilot-page-size {
 	display: flex;
 	align-items: center;
@@ -93,6 +148,7 @@
 	color: #50575e;
 }
 
+.schemapilot-type-filter select,
 .schemapilot-page-size select {
 	min-width: 90px;
 }
@@ -136,7 +192,7 @@
 .schemapilot-table {
 	border: 0;
 	margin: 0;
-	min-width: 860px;
+	min-width: 980px;
 }
 
 .schemapilot-table th,
@@ -323,6 +379,10 @@
 @media (max-width: 782px) {
 	.schemapilot-page-header {
 		flex-direction: column;
+	}
+
+	.schemapilot-settings-card {
+		grid-template-columns: 1fr;
 	}
 
 	.schemapilot-page-header .button {
