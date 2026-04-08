@@ -263,12 +263,14 @@
 		}
 
 		var searchInput = document.getElementById('schemapilot-search');
+		var typeFilter = document.getElementById('schemapilot-type-filter');
 		var pageSizeSelect = document.getElementById('schemapilot-page-size');
 		var pagination = document.getElementById('schemapilot-pagination');
 		var emptyRow = null;
 		var currentPage = 1;
 		var pageSize = parseInt(pageSizeSelect ? pageSizeSelect.value : '10', 10) || 10;
 		var searchTerm = '';
+		var selectedType = typeFilter ? typeFilter.value : 'all';
 
 		function ensureEmptyRow() {
 			if (emptyRow) {
@@ -277,7 +279,7 @@
 			emptyRow = document.createElement('tr');
 			emptyRow.className = 'schemapilot-empty-row';
 			var cell = document.createElement('td');
-			cell.colSpan = 6;
+			cell.colSpan = 7;
 			cell.className = 'schemapilot-empty-cell';
 			cell.textContent = 'No matching records.';
 			emptyRow.appendChild(cell);
@@ -291,8 +293,37 @@
 			return row.textContent.toLowerCase().indexOf(searchTerm) !== -1;
 		}
 
+		function matchesType(row) {
+			if (!selectedType || selectedType === 'all') {
+				return true;
+			}
+
+			var rowType = (row.getAttribute('data-content-type') || '').toLowerCase();
+
+			if (!rowType) {
+				var typeCell = row.querySelector('td:nth-child(4)');
+				rowType = typeCell ? typeCell.textContent.toLowerCase().trim() : '';
+			}
+
+			if (rowType === 'page' || rowType === 'post') {
+				return rowType === selectedType;
+			}
+
+			if (rowType === 'pages') {
+				return selectedType === 'page';
+			}
+
+			if (rowType === 'posts') {
+				return selectedType === 'post';
+			}
+
+			return false;
+		}
+
 		function getFilteredRows() {
-			return dataRows.filter(matchesSearch);
+			return dataRows.filter(function (row) {
+				return matchesSearch(row) && matchesType(row);
+			});
 		}
 
 		function clearPagination() {
@@ -405,6 +436,14 @@
 		if (searchInput) {
 			searchInput.addEventListener('input', function (event) {
 				searchTerm = event.target.value.toLowerCase().trim();
+				currentPage = 1;
+				updateTable();
+			});
+		}
+
+		if (typeFilter) {
+			typeFilter.addEventListener('change', function (event) {
+				selectedType = event.target.value.toLowerCase();
 				currentPage = 1;
 				updateTable();
 			});
