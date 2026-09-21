@@ -1,5 +1,4 @@
 # SchemaPilot - WordPress JSON-LD Schema Manager
-
 SchemaPilot is a lightweight WordPress plugin that lets you add custom structured data (JSON-LD) to published Pages, Posts, or both for better SEO and rich result eligibility.
 
 ---
